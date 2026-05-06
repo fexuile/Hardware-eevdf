@@ -50,13 +50,24 @@ object NiceTable {
   // Call this from inside a Module to get hardware LUT
   def lut: Vec[UInt] = VecInit(weightInts.map(_.U(17.W)))
 
-  def clamp(nice: SInt): SInt =
-    Mux(nice < MIN_NICE.S, MIN_NICE.S,
-    Mux(nice > MAX_NICE.S, MAX_NICE.S, nice))
+  // 256-entry LUT: maps 8-bit nice value directly to weight.
+  // Clamping to [-20, 19] is baked into the LUT values.
+  // This avoids Chisel/CIRCT width inference issues with signed mux.
+  def fullLut: Vec[UInt] = {
+    val entries = (0 until 256).map { i =>
+      val signedNice = i.toByte  // -128 to 127
+      val clamped = if (signedNice < MIN_NICE) MIN_NICE
+                     else if (signedNice > MAX_NICE) MAX_NICE
+                     else signedNice
+      weightInts(clamped - MIN_NICE).U(17.W)
+    }
+    VecInit(entries)
+  }
 
   def toWeight(nice: SInt, lut: Vec[UInt]): UInt = {
-    val idx = (clamp(nice) +& (-MIN_NICE).S).asUInt
-    lut(idx)
+    // Use full 8-bit unsigned interpretation as LUT index.
+    // Clamping is baked into lut values, so no hardware clamp needed.
+    lut(nice.asUInt)
   }
 }
 
@@ -103,7 +114,7 @@ class EEVDFSchedulerCore(params: EEVDFSchedulerParams) extends Module {
   })
 
   // Nice LUT — instantiated once in the Module
-  val niceLut = NiceTable.lut
+  val niceLut = NiceTable.fullLut
 
   // Per-entity state
   val runnable     = RegInit(VecInit(Seq.fill(params.maxTasks)(false.B)))
@@ -284,12 +295,9 @@ class EEVDFSchedulerCore(params: EEVDFSchedulerParams) extends Module {
     requestTime(i)  := nextRequestTime(i)
   }
   virtualTimeReg := nextVirtualTime
-  when (io.cmdValid && io.cmdOp === 5.U) {
-    curTaskId    := nextBest.taskId
-    curTaskValid := nextBest.valid
-  } .elsewhen (io.cmdValid) {
-    curTaskId    := nextBest.taskId
-    curTaskValid := nextBest.valid
+  when (io.cmdValid) {
+    curTaskId    := nextCurTaskId
+    curTaskValid := nextCurValid
   }
 
   //----------------------------------------------------------------------
@@ -347,7 +355,7 @@ class EEVDFSchedulerTL(params: EEVDFSchedulerParams, beatBytes: Int)
       val delta = RegInit(0.U(32.W))
 
       core.io.cmdVruntime := Cat(vrHi, vrLo)
-      core.io.cmdNice     := nice.asSInt
+      core.io.cmdNice     := nice.asSInt.asSInt
       core.io.cmdTickDelta := delta
 
       def doCmd(valid: Bool, bits: UInt): Bool = {

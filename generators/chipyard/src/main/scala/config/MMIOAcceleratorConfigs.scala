@@ -78,3 +78,12 @@ class ManyMMIOAcceleratorRocketConfig extends Config(
   new chipyard.example.WithStreamingFIR ++                  // use top with tilelink-controlled streaming FIR
   new freechips.rocketchip.rocket.WithNHugeCores(1) ++
   new chipyard.config.AbstractConfig)
+
+// DOC include start: EEVDFSchedulerBlockDeviceRocketConfig
+class EEVDFSchedulerBlockDeviceRocketConfig extends Config(
+  new chipyard.example.WithEEVDFScheduler(address=0x10051000L, maxTasks=64) ++
+  new chipyard.harness.WithSimBlockDevice ++
+  new testchipip.iceblk.WithBlockDevice ++
+  new freechips.rocketchip.rocket.WithNHugeCores(1) ++
+  new chipyard.config.AbstractConfig)
+// DOC include end: EEVDFSchedulerBlockDeviceRocketConfig

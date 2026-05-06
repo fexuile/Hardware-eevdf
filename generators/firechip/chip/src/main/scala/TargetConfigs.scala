@@ -361,3 +361,17 @@ class FireSimLargeBoomSV39CospikeConfig extends Config(
   new WithFireSimConfigTweaks++
   new freechips.rocketchip.rocket.WithSV39 ++
   new chipyard.LargeBoomV3Config)
+
+// EEVDF Scheduler Config for FireSim
+class WithEEVDFSchedulerFireSim extends Config((site, here, up) => {
+  case chipyard.example.EEVDFSchedulerKey => Some(chipyard.example.EEVDFSchedulerParams(
+    address = 0x10051000L,
+    maxTasks = 64))
+})
+
+class FireSimRocketEEVDF1GiBDRAMConfig extends Config(
+  new freechips.rocketchip.subsystem.WithExtMemSize((1 << 30) * 1L) ++  // 1 GiB for VCU118
+  new WithEEVDFSchedulerFireSim ++
+  new WithDefaultFireSimBridges ++
+  new WithFireSimConfigTweaks ++
+  new chipyard.RocketConfig)
